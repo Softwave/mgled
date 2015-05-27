@@ -38,7 +38,9 @@ var EditorConsole = (function(){
   }
   return EditorConsole;
 })();
-
+var trace = function(text){
+  EditorConsole.appendNotice(text);
+}
 var ErrorReporter = (function(){
   function ErrorReporter() {}
   ErrorReporter.setSourceMap = function(_sourceMap){
@@ -165,10 +167,36 @@ $(function(){
       contentType: 'application/json',
       data: JSON.stringify(gistToCreate)
     }).done(function(data){
-      var playUrl = 'http://jonbro.tk/mgled/play.html?p='+data.id;
+      var playUrl = 'http://mgled.neocities.org/play.html?p='+data.id;
       EditorConsole.appendNotice('play at <a href="'+playUrl+'">'+playUrl+'</a>');
     });
   }
+
+  var exportToFile = function() {
+    //game.zip contains a setup page that the game can use
+    JSZipUtils.getBinaryContent('game.zip', function(err, data) {
+      if(err) {
+        return;
+      }
+
+      var zip = new JSZip(data);
+
+      //Add the compiled JavaScript to the zip file
+      var jsCode = CoffeeScript.compile(editor.doc.getValue());
+      zip.file("main.js", jsCode);
+
+      //Also add the original CoffeeScript file to the zip 
+      //Like, in-case someone wants that 
+      var srcCode = editor.doc.getValue();
+      zip.file("main.coffee", srcCode);
+
+      //Generate and save the file
+      var content = zip.generate({type:"blob"});
+      saveAs(content, "Game.zip");
+
+    });
+  }
+
   function dateToReadable(title,time) {
     var year = time.getFullYear();
     var month = time.getMonth()+1;
@@ -277,29 +305,35 @@ $(function(){
     ErrorReporter.setSourceMap(cssourcemap);
     try{
       CoffeeScript.eval(editor.doc.getValue(), {sandbox:true, sourceMap:true, filename:"none"});
-      saveToStorage();
     }catch(e){
       ErrorReporter.handleError(e);
     }
+    saveToStorage();
   });
   $("#shareClickLink").click(function(){
     saveToGist();
   });
+  $("#exportClickLink").click(function() {
+    exportToFile();
+  });
   $("#runClickLink").click(function(){
     // take the code in the editor window and run it through coffeescript, then run the game
     try{
+      EditorConsole.clear();
       var cssourcemap = CoffeeScript.compile(editor.doc.getValue(), {sandbox:true, sourceMap:true, filename:"none"});
       // would be nice to not compile everything twice, and I am not really sure how much the sandbox is getting me (if anything)
       ErrorReporter.setSourceMap(cssourcemap);
+      console.log(cssourcemap);
       CoffeeScript.eval(editor.doc.getValue(), {sandbox:true, sourceMap:true, filename:"none"});
       try{
         // shouldn't have hit errors, so run the game
-        EditorConsole.clear();
         EditorConsole.appendNotice('running game');
+        window.initialize();
         Game.initialize();
         resize_all();
       }catch(e){
         console.log('handling error I think?');
+        console.log(e);
         ErrorReporter.handleError(e);
       }
     }catch(e){
